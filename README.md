@@ -1,6 +1,6 @@
 # 🤖 Zed — Voice Assistant
 
-A local voice assistant that listens 24/7 for a wake word, transcribes your speech, queries Gemini 2.0 Flash with your Obsidian vault as context, and speaks the response — all while ducking your system audio.
+A local voice assistant that listens 24/7 for a wake word, transcribes your speech, queries **Ollama** with your Obsidian vault as context, and speaks the response — all while ducking your system audio.
 
 **Fully CPU/AMD compatible — no CUDA required.**
 
@@ -10,8 +10,8 @@ A local voice assistant that listens 24/7 for a wake word, transcribes your spee
 listener.py ──→ wake word detected (openwakeword)
 main.py     ──→ ducks system audio (pycaw)
 listener.py ──→ records + transcribes speech (faster-whisper)
-brain.py    ──→ loads recent Obsidian notes + queries Gemini 2.0 Flash
-audio.py    ──→ speaks response via Kokoro TTS
+brain.py    ──→ loads recent Obsidian notes + queries Ollama (minimax-m2.5:cloud)
+audio.py    ──→ speaks response via Edge TTS
 main.py     ──→ restores system audio
 brain.py    ──→ logs exchange to vault/Journal/YYYY-MM-DD.md
 ```
@@ -21,19 +21,15 @@ brain.py    ──→ logs exchange to vault/Journal/YYYY-MM-DD.md
 - **Python 3.10+**
 - **Windows 10/11** (pycaw requires Windows audio APIs)
 - **A working microphone**
-- **espeak-ng** (required by Kokoro TTS for phoneme generation)
+- **Ollama** installed and running locally
 
-### Install espeak-ng
+### Install Ollama
 
-1. Download the latest `.msi` from [espeak-ng releases](https://github.com/espeak-ng/espeak-ng/releases)
-2. Run the installer
-3. Make sure `espeak-ng` is on your PATH (the installer usually handles this)
-
-### Get a Gemini API Key
-
-1. Go to [Google AI Studio](https://aistudio.google.com)
-2. Create a free API key
-3. Set it as an environment variable (see below)
+1. Download and install from [ollama.com](https://ollama.com)
+2. Pull the default model:
+   ```bash
+   ollama pull minimax-m2.5:cloud
+   ```
 
 ## Setup
 
@@ -50,8 +46,8 @@ python -m venv venv
 # 4. Install dependencies
 pip install -r requirements.txt
 
-# 5. Set your Gemini API key
-$env:GEMINI_API_KEY = AIzaSyBPP_r5jfBe-Wbzxr6C5ivgoZrplmq8gxs"your-api-key-here"
+# 5. Ensure Ollama is running
+# (Just open the Ollama app or run 'ollama serve' in another terminal)
 
 # 6. Run Zed
 python main.py
@@ -63,19 +59,19 @@ All settings are in `config.py`:
 
 | Setting | Default | Description |
 |---|---|---|
-| `GEMINI_API_KEY` | env var | Your Gemini API key |
-| `GEMINI_MODEL` | `gemini-2.0-flash` | LLM model to use |
+| `OLLAMA_URL` | `http://localhost:11434/api/chat` | Your local Ollama endpoint |
+| `OLLAMA_MODEL` | `minimax-m2.5:cloud` | LLM model to use |
 | `VAULT_PATH` | `~/Documents/ZedVault` | Path to your Obsidian vault |
 | `WAKE_WORD` | `hey_jarvis` | Wake word model name |
-| `WAKE_THRESHOLD` | `0.5` | Wake word confidence threshold |
-| `DUCK_VOLUME` | `0.20` | Volume level during ducking (20%) |
-| `WHISPER_MODEL` | `small` | faster-whisper model size |
-| `KOKORO_VOICE` | `af_heart` | Kokoro TTS voice preset |
+| `WAKE_THRESHOLD` | `0.2` | Wake word confidence threshold |
+| `DUCK_VOLUME` | `0.1` | Volume level during ducking (10%) |
+| `WHISPER_MODEL` | `base` | faster-whisper model size |
+| `EDGE_TTS_VOICE` | `en-US-AriaNeural` | Edge TTS voice preset |
 | `SILENCE_TIMEOUT` | `2.0` | Seconds of silence before stop recording |
 
 ### Obsidian Vault
 
-Zed uses a local folder of `.md` files as its memory. By default this is `./vault` inside the project. You can either:
+Zed uses a local folder of `.md` files as its memory. By default this is `~/Documents/ZedVault`. You can either:
 
 1. **Point to your existing Obsidian vault** by changing `VAULT_PATH` in `config.py`
 2. **Use the default** — Zed will create `vault/Journal/` and log all conversations there
@@ -89,7 +85,7 @@ Zed uses a local folder of `.md` files as its memory. By default this is `./vaul
 4. You'll hear a confirmation beep
 5. Speak your question
 6. Zed will respond via TTS
-7. The exchange is logged to `vault/Journal/YYYY-MM-DD.md`
+7. The exchange is logged to your Vault
 
 ## File Structure
 
@@ -97,34 +93,27 @@ Zed uses a local folder of `.md` files as its memory. By default this is `./vaul
 zed/
 ├── main.py          # Orchestrator — starts threads, manages conversation loop
 ├── listener.py      # Wake word detection + speech-to-text
-├── audio.py         # Volume ducking (pycaw) + TTS (Kokoro)
-├── brain.py         # Gemini LLM + Obsidian vault context
+├── audio.py         # Volume ducking (pycaw) + TTS (Edge TTS)
+├── brain.py         # Ollama LLM + Obsidian vault context
 ├── mcp_client.py    # MCP client stub (clean async interface)
 ├── config.py        # All configuration constants
 ├── requirements.txt # Python dependencies
 ├── README.md        # This file
-└── vault/           # Obsidian vault (auto-created)
-    └── Journal/     # Daily conversation logs
+├── scripts/         # Infrastructure scripts (init_artifact, bundle_artifact, etc.)
+└── skills/          # Custom tool skills (.md files)
 ```
 
-## MCP Integration (Future)
+## Skills & MCP Integration
 
-`mcp_client.py` exposes a clean async interface:
-
-```python
-client = MCPClient()
-await client.connect("ws://localhost:8080")
-result = await client.call_tool("web_search", {"query": "weather today"})
-```
-
-Currently returns stub responses. Replace the internals with a real MCP SDK when ready.
+Zed supports native **Skills** (Markdown-based tools) and **MCP (Model Context Protocol)** servers.
+- See `skills/` for examples of terminal-based tools.
+- Use `python install_mcp.py --cmd <cmd> --args "<args>"` to import tools from any MCP server.
 
 ## Troubleshooting
 
 | Issue | Solution |
 |---|---|
-| `GEMINI_API_KEY is not set` | Set the env var: `$env:GEMINI_API_KEY = "..."` |
+| `Ollama connection failed` | Ensure Ollama is running and you have pulled the model |
 | Microphone not working | Check Windows Settings → Privacy → Microphone |
-| `espeak-ng` not found | Install it from the releases page and restart your terminal |
 | `pyaudio` install fails | `pip install pipwin && pipwin install pyaudio` |
-| High CPU usage | Normal on first run (models are loading). Settles after ~30s |
+| Audio quality issues | Check `MIC_GAIN` and `SAMPLE_RATE` in `config.py` |
