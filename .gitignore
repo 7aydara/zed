@@ -5,3 +5,13 @@ __pycache__/
 diagnose_output.txt
 test_output.txt
 .DS_Store
+mcp_error.txt
+temp.db
+test_artifact*
+bundle.html
+dist/
+node_modules/
+temp_*.md
+*.log
+mcp_error.txt
+{project_name}/

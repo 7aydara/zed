@@ -96,7 +96,8 @@ class FloatingAgent(ctk.CTk):
             self.wake_event.clear()
             if not self.expanded:
                 self.show_expanded(animate=True)
-            self.continuous_event.set()
+            
+            # Update UI to reflect that listener.py is actively recording natively
             self.mic_btn.configure(fg_color="#D03B3B", hover_color="#B02A2A", text="⏹")
             self.entry.configure(placeholder_text="Listening...", border_color="#D03B3B")
             self.entry.delete(0, "end")
@@ -107,24 +108,26 @@ class FloatingAgent(ctk.CTk):
         try:
             while True:
                 msg = self.text_queue.get_nowait()
+                
+                # The listener loop hit the silence timeout. Close the microphone lock!
+                self.continuous_event.clear()
+                
                 if msg:
-                    # User stopped speaking
-                    self.continuous_event.clear()
+                    # User stopped speaking, return UI to thinking state
                     self.mic_btn.configure(fg_color="#D4AF37", hover_color="#B5952F", text="🎤")
                     self.entry.configure(placeholder_text="Zed is thinking...", border_color="#D4AF37")
                     
                     lower_msg = msg.lower().strip()
-                    if "bye zed" in lower_msg or lower_msg == "bye":
+                    if "bye" in lower_msg or "goodbye" in lower_msg:
                         self.current_zed_response = "Goodbye!"
                         self.speak_response(continuous=False) # Say bye then collapse
                         continue
                         
                     self.send_message_direct(msg)
                 else:
-                    # Keep listening or return to standard
-                    if not self.continuous_event.is_set():
-                        self.mic_btn.configure(fg_color="#D4AF37", text="🎤")
-                        self.entry.configure(placeholder_text="Wait for wake word...")
+                    # Silence was hit, but no valid words were processed. Return to standard wait state.
+                    self.mic_btn.configure(fg_color="#D4AF37", hover_color="#B5952F", text="🎤")
+                    self.entry.configure(placeholder_text="Wait for wake word...")
         except queue.Empty:
             pass
 
@@ -137,7 +140,7 @@ class FloatingAgent(ctk.CTk):
         
         try:
             icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "icon.png")
-            icon_img = Image.open(icon_path).resize((50, 50), Image.LANCZOS)
+            icon_img = Image.open(icon_path).convert("RGBA").resize((50, 50), Image.LANCZOS)
             self.logo_image = ctk.CTkImage(light_image=icon_img, dark_image=icon_img, size=(50, 50))
             self.z_btn = ctk.CTkButton(self.collapsed_frame, text="", image=self.logo_image, width=60, height=60, 
                                        corner_radius=15, fg_color="transparent", hover_color="#28282B",
@@ -271,10 +274,12 @@ class FloatingAgent(ctk.CTk):
                 audio.speak(self.current_zed_response)
                 # After speaking, if continuous mode, start listening again
                 if continuous and "bye" not in self.current_zed_response.lower() and "goodbye" not in self.current_zed_response.lower():
+                    # After Zed finishes speaking, we open the mic again automatically!
                     self.continuous_event.set()
                     self.after(0, lambda: self.mic_btn.configure(fg_color="#D03B3B", hover_color="#B02A2A", text="⏹"))
                     self.after(0, lambda: self.entry.configure(placeholder_text="Listening...", border_color="#D03B3B"))
                 elif not continuous or "bye" in self.current_zed_response.lower() or "goodbye" in self.current_zed_response.lower():
+                    # Close out the conversation gracefully
                     self.continuous_event.clear()
                     self.after(0, lambda: self.show_collapsed(animate=True))
 

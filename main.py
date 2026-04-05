@@ -71,15 +71,23 @@ def main() -> None:
     signal.signal(signal.SIGINT, shutdown)
     signal.signal(signal.SIGTERM, shutdown)
 
+    print("DEBUG: Executing lazily loaded imports")
     import listener
     import rag
+    print("DEBUG: Importing dream")
+    import dream
+    print("DEBUG: Pre-loading heavy PyTorch models")
     # Pre-load heavy PyTorch models in the background so the first turn is instant
     threading.Thread(target=listener._get_whisper, daemon=True).start()
     threading.Thread(target=audio._init_pygame, daemon=True).start()
     
-    # ── Start RAG background sync ───────────────────────────────────────────
+    print("DEBUG: Starting RAG sync")
+    # ── Start Background Workers ─────────────────────────────────────────────
     rag.start_background_sync(interval=60)
+    print("DEBUG: Starting dream thread")
+    dream.start_background_dream(interval=3600)  # Consolidate memory every hour
 
+    print("DEBUG: Reaching main conversation loop")
     # ── Main conversation loop ──────────────────────────────────────────────
     log.info("✅ Zed is ready — say '%s' to start!", config.WAKE_WORD.replace("_", " "))
 
