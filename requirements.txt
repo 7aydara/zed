@@ -1,0 +1,11 @@
+openwakeword
+faster-whisper
+kokoro
+soundfile
+sounddevice
+pyaudio
+webrtcvad
+pycaw
+comtypes
+google-genai
+numpy

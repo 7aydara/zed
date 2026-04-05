@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+.env
+diagnose_output.txt
+test_output.txt
+.DS_Store
